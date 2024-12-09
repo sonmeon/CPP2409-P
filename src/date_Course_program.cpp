@@ -1,135 +1,167 @@
 #include <iostream>
+#include <fstream>
 #include <vector>
 #include <string>
+#include <sstream>
+#include <cstdlib> // 랜덤 추천용
+#include <ctime>
+#include <numeric>  // iota 사용
+#include <random>   // std::default_random_engine 사용
+#include <algorithm> // std::shuffle 사용
+
 using namespace std;
 
-struct DateCourse {
+// 구조체 정의
+struct Course {
     string city;
     string theme;
-    vector<string> places;
-    vector<string> activities;
-    vector<int> times; // 각 활동에 소요되는 시간 (분 단위)
+    string place;
+    string activity;
+    int time;
 };
 
 // 함수 선언
-void showCityOptions();
-void showThemeOptions();
-void showCoursePlan(int cityChoice, int themeChoice);
-void displayCourse(const DateCourse& course);
+vector<Course> loadCourses(const string& fileName);
+void displayCourse(const vector<Course>& courses);
+void reRecommend(vector<Course>& courses, const string& selectedCity, const string& selectedTheme, const vector<Course>& previousCourses);
 
 int main() {
-    int cityChoice, themeChoice;
+    srand(static_cast<unsigned>(time(0))); // 랜덤 시드 설정
+    vector<Course> courses = loadCourses("courses.txt"); // 코스 로드
+    string cities[] = {"서울", "부산", "광주", "순천", "대전"};
+    string themes[] = {"힐링", "활동", "문화", "맛집"};
 
-    // 도시 선택
-    showCityOptions();
-    cout << "도시를 선택하세요 (1: 서울, 2: 부산, 3: 광주, 4: 순천, 5: 대전): ";
+    int cityChoice, themeChoice;
+    cout << "도시 목록: 1: 서울, 2: 부산, 3: 광주, 4: 순천, 5: 대전" << endl;
+    cout << "도시를 선택하세요 (1~5): ";
     cin >> cityChoice;
 
-    // 테마 선택
-    showThemeOptions();
-    cout << "테마를 선택하세요 (1: 힐링, 2: 활동, 3: 문화, 4: 맛집): ";
+    cout << "테마 목록: 1: 힐링, 2: 활동, 3: 문화, 4: 맛집" << endl;
+    cout << "테마를 선택하세요 (1~4): ";
     cin >> themeChoice;
 
-    // 선택에 맞는 코스 출력
-    showCoursePlan(cityChoice, themeChoice);
+    if (cityChoice < 1 || cityChoice > 5 || themeChoice < 1 || themeChoice > 4) {
+        cout << "잘못된 입력입니다. 프로그램을 종료합니다." << endl;
+        return 0;
+    }
 
+    string selectedCity = cities[cityChoice - 1];
+    string selectedTheme = themes[themeChoice - 1];
+
+    // 선택된 코스 필터링
+    vector<Course> selectedCourses;
+    for (const auto& course : courses) {
+        if (course.city == selectedCity && course.theme == selectedTheme) {
+            selectedCourses.push_back(course);
+        }
+    }
+
+    if (selectedCourses.empty()) {
+        cout << "선택하신 도시와 테마에 맞는 코스가 없습니다." << endl;
+        return 0;
+    }
+
+    // 랜덤으로 4개의 코스 선택
+    vector<Course> recommendedCourses;
+    vector<int> indices(selectedCourses.size());
+    iota(indices.begin(), indices.end(), 0); // 0부터 시작하는 인덱스 배열 생성
+
+    // std::shuffle을 사용해 인덱스 섞기
+    random_device rd;
+    mt19937 g(rd());
+    std::shuffle(indices.begin(), indices.end(), g);
+
+    for (int i = 0; i < 4 && i < selectedCourses.size(); ++i) {
+        recommendedCourses.push_back(selectedCourses[indices[i]]);
+    }
+
+    displayCourse(recommendedCourses);
+
+    char retry;
+    do {
+        cout << "마음에 들지 않는 코스가 있나요? (y/n): ";
+        cin >> retry;
+        if (retry == 'y') {
+            reRecommend(recommendedCourses, selectedCity, selectedTheme, selectedCourses);
+            displayCourse(recommendedCourses);
+        }
+    } while (retry == 'y');
+
+    cout << "프로그램을 종료합니다. 즐거운 데이트 되세요!" << endl;
     return 0;
 }
 
-// 도시 선택지 출력
-void showCityOptions() {
-    cout << "도시 목록: 1: 서울, 2: 부산, 3: 광주, 4: 순천, 5: 대전" << endl;
+// 코스 데이터를 파일에서 로드
+vector<Course> loadCourses(const string& fileName) {
+    vector<Course> courses;
+    ifstream file(fileName);
+
+    if (!file) {
+        cerr << "파일을 열 수 없습니다: " << fileName << endl;
+        return courses;
+    }
+
+    string line;
+    while (getline(file, line)) {
+        stringstream ss(line);
+        string city, theme, place, activity, timeStr;
+
+        getline(ss, city, ',');
+        getline(ss, theme, ',');
+        getline(ss, place, ',');
+        getline(ss, activity, ',');
+        getline(ss, timeStr, ',');
+
+        Course course = {city, theme, place, activity, stoi(timeStr)};
+        courses.push_back(course);
+    }
+
+    file.close();
+    return courses;
 }
 
-// 테마 선택지 출력
-void showThemeOptions() {
-    cout << "테마 목록: 1: 힐링, 2: 활동, 3: 문화, 4: 맛집" << endl;
+// 코스 출력
+void displayCourse(const vector<Course>& courses) {
+    cout << "\n***** 추천 데이트 코스 *****" << endl;
+    for (size_t i = 0; i < courses.size(); i++) {
+        cout << i + 1 << ". 장소: " << courses[i].place << endl;
+        cout << "   활동: " << courses[i].activity << endl;
+        cout << "   소요 시간: " << courses[i].time << "분" << endl;
+        cout << "------------------------" << endl;
+    }
 }
 
-// 도시와 테마에 맞는 데이트 코스를 출력하는 함수
-void showCoursePlan(int cityChoice, int themeChoice) {
-    vector<DateCourse> courses;
+// 특정 코스 재추천
+void reRecommend(vector<Course>& courses, const string& selectedCity, const string& selectedTheme, const vector<Course>& previousCourses) {
+    int choice;
+    cout << "재추천을 원하는 코스 번호를 입력하세요 (1 ~ " << courses.size() << "): ";
+    cin >> choice;
 
-    // 서울 도시와 테마에 따른 코스
-    if (cityChoice == 1) {
-        if (themeChoice == 1) {
-            courses.push_back({"서울", "힐링", {"서울숲", "성수동 카페거리", "청계천"}, {"산책", "카페 탐방", "산책"}, {60, 90, 60}});
-        } else if (themeChoice == 2) {
-            courses.push_back({"서울", "활동", {"잠실 롯데월드", "석촌호수", "야구장"}, {"놀이기구", "호수 산책", "야구 응원"}, {120, 30, 90}});
-        } else if (themeChoice == 3) {
-            courses.push_back({"서울", "문화", {"국립중앙박물관", "이태원 북카페", "한남동 갤러리"}, {"박물관 관람", "책 읽기", "갤러리 투어"}, {90, 60, 90}});
-        } else if (themeChoice == 4) {
-            courses.push_back({"서울", "맛집", {"마포 돼지갈비", "홍대 디저트 카페", "경의선 숲길"}, {"돼지갈비", "디저트", "산책"}, {60, 45, 60}});
-        }
-    }
-    // 부산 도시와 테마에 따른 코스
-    else if (cityChoice == 2) {
-        if (themeChoice == 1) {
-            courses.push_back({"부산", "힐링", {"이기대", "오륙도 스카이워크", "해운대 카페"}, {"산책", "스카이워크", "카페"}, {60, 60, 90}});
-        } else if (themeChoice == 2) {
-            courses.push_back({"부산", "활동", {"송정 서핑", "해운대 요트", "광안리 수변공원"}, {"서핑", "요트", "산책"}, {120, 90, 60}});
-        } else if (themeChoice == 3) {
-            courses.push_back({"부산", "문화", {"감천문화마을", "영화의 전당", "부산현대미술관"}, {"벽화 감상", "영화 관람", "미술관"}, {60, 120, 90}});
-        } else if (themeChoice == 4) {
-            courses.push_back({"부산", "맛집", {"자갈치 시장", "국제시장", "부평깡통야시장"}, {"해산물", "간식", "야시장"}, {60, 60, 90}});
-        }
-    }
-    // 광주 도시와 테마에 따른 코스
-    else if (cityChoice == 3) {
-        if (themeChoice == 1) {
-            courses.push_back({"광주", "힐링", {"무등산", "전남대 메타세쿼이아길", "양림동 근대문화마을"}, {"산책", "문화 탐방"}, {120, 60, 90}});
-        } else if (themeChoice == 2) {
-            courses.push_back({"광주", "활동", {"국립아시아문화전당", "롤러장", "충장로 거리"}, {"전시 관람", "롤러 타기", "쇼핑"}, {90, 120, 90}});
-        } else if (themeChoice == 3) {
-            courses.push_back({"광주", "문화", {"518 민주화공원", "대인예술시장", "아트시네마"}, {"역사 탐방", "예술 작품 감상", "영화 관람"}, {90, 60, 120}});
-        } else if (themeChoice == 4) {
-            courses.push_back({"광주", "맛집", {"송정떡갈비", "동명동 카페거리", "국밥 맛집"}, {"떡갈비", "디저트", "국밥"}, {60, 45, 60}});
-        }
-    }
-    // 순천 도시와 테마에 따른 코스
-    else if (cityChoice == 4) {
-        if (themeChoice == 1) {
-            courses.push_back({"순천", "힐링", {"순천만 국가정원", "순천만 습지", "조계산 숲길"}, {"산책", "자연 탐방", "산책"}, {120, 90, 60}});
-        } else if (themeChoice == 2) {
-            courses.push_back({"순천", "활동", {"드라마 촬영장", "체험 마을", "나이트 사파리"}, {"사진 촬영", "체험", "사파리"}, {90, 120, 90}});
-        } else if (themeChoice == 3) {
-            courses.push_back({"순천", "문화", {"순천 향교", "낙안읍성", "전통 찻집"}, {"전통 문화 체험", "찻집 탐방"}, {90, 60, 45}});
-        } else if (themeChoice == 4) {
-            courses.push_back({"순천", "맛집", {"꼬막정식", "야시장", "간식 카페"}, {"꼬막정식", "야시장", "디저트"}, {60, 60, 45}});
-        }
-    }
-    // 대전 도시와 테마에 따른 코스
-    else if (cityChoice == 5) {
-        if (themeChoice == 1) {
-            courses.push_back({"대전", "힐링", {"대청호 오백리길", "한밭수목원", "유성온천"}, {"산책", "자연 탐방", "온천"}, {120, 90, 60}});
-        } else if (themeChoice == 2) {
-            courses.push_back({"대전", "활동", {"성심당", "카이스트 자연사박물관", "엑스포 다리"}, {"맛집", "박물관 체험", "산책"}, {60, 90, 60}});
-        } else if (themeChoice == 3) {
-            courses.push_back({"대전", "문화", {"대전 예술의전당", "중앙시장", "갤러리"}, {"공연 관람", "시장 탐방", "미술관"}, {120, 60, 90}});
-        } else if (themeChoice == 4) {
-            courses.push_back({"대전", "맛집", {"칼국수 맛집", "성심당 디저트", "밤거리 포장마차"}, {"칼국수", "디저트", "포장마차"}, {60, 45, 90}});
-        }
-    }
-
-    // 선택된 코스가 없을 경우
-    if (courses.empty()) {
-        cout << "선택하신 도시와 테마에 맞는 코스가 없습니다." << endl;
+    if (choice < 1 || choice > static_cast<int>(courses.size())) {
+        cout << "잘못된 입력입니다. 다시 시도하세요." << endl;
         return;
     }
 
-    // 코스 출력
-    for (const auto& course : courses) {
-        displayCourse(course);
+    vector<Course> remainingCourses;
+    for (const auto& course : previousCourses) {
+        bool isDuplicate = false;
+        for (const auto& current : courses) {
+            if (course.place == current.place) {
+                isDuplicate = true;
+                break;
+            }
+        }
+        if (!isDuplicate) {
+            remainingCourses.push_back(course);
+        }
     }
-}
 
-// 코스 출력 함수
-void displayCourse(const DateCourse& course) {
-    cout << "\n***** " << course.city << " " << course.theme << " 데이트 코스 *****" << endl;
-    for (size_t i = 0; i < course.places.size(); i++) {
-        cout << "장소: " << course.places[i] << endl;
-        cout << "활동: " << course.activities[i] << endl;
-        cout << "소요 시간: " << course.times[i] << "분" << endl;
-        cout << "------------------------" << endl;
+    if (remainingCourses.empty()) {
+        cout << "더 이상 추천할 코스가 없습니다." << endl;
+        return;
     }
+
+    int randomIndex = rand() % remainingCourses.size();
+    courses[choice - 1] = remainingCourses[randomIndex];
+    cout << "선택하신 코스가 재추천되었습니다!" << endl;
 }
